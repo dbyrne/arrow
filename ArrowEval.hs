@@ -8,6 +8,11 @@ evalArrow val@(String _) = return val
 evalArrow val@(Number _) = return val
 evalArrow val@(Bool _) = return val
 evalArrow (List [Identifier "quote", val]) = return val
+evalArrow (List [Identifier "if", predicate, thenClause, elseClause]) = do
+  result <- evalArrow predicate
+  case result of
+    Bool False -> evalArrow elseClause
+    _          -> evalArrow thenClause
 evalArrow (List (Identifier func : args)) = mapM evalArrow args >>= apply func
 evalArrow badForm = throwError $ BadSpecialForm "Unrecognized special form" badForm
 
@@ -16,7 +21,37 @@ apply func args = maybe (throwError $ NotFunction "Missing function" func)
                   ($ args)
                   (lookup func primitives)
 
-primitives = numOps ++ boolOps
+first :: [ArrowVal] -> ThrowsEx ArrowVal
+first [List (x : xs)] = return x
+first badArgList      = throwError $ NumArgs 1 badArgList
+
+rest :: [ArrowVal] -> ThrowsEx ArrowVal
+rest [List (x : xs)] = return $ List xs
+rest badArgList      = throwError $ NumArgs 1 badArgList
+
+cons :: [ArrowVal] -> ThrowsEx ArrowVal
+cons [x, List xs] = return $ List $ x : xs
+cons badArgList   = throwError $ NumArgs 2 badArgList
+
+eqv :: [ArrowVal] -> ThrowsEx ArrowVal
+eqv [(Bool arg1), (Bool arg2)]             = return $ Bool $ arg1 == arg2
+eqv [(Number arg1), (Number arg2)]         = return $ Bool $ arg1 == arg2
+eqv [(String arg1), (String arg2)]         = return $ Bool $ arg1 == arg2
+eqv [(Identifier arg1), (Identifier arg2)] = return $ Bool $ arg1 == arg2
+eqv [(List arg1), (List arg2)] = return $ Bool $ (length arg1 == length arg2) && (all eqvPair $ zip arg1 arg2)
+  where eqvPair (x1, x2) = case eqv [x1, x2] of
+          Left err -> False
+          Right (Bool val) -> val
+eqv [_, _] = return $ Bool False
+eqv badArgList = throwError $ NumArgs 2 badArgList
+
+primitives = numOps ++ boolOps ++ listOps
+
+listOps :: [(String, [ArrowVal] -> ThrowsEx ArrowVal)]
+listOps = [ ("first", first)
+          , ("rest", rest)
+          , ("cons", cons)
+          ]
 
 numOps :: [(String, [ArrowVal] -> ThrowsEx ArrowVal)]
 numOps = [ ("+", numOp (+))
@@ -34,7 +69,8 @@ numOp op [singleVal] = throwError $ NumArgs 2 [singleVal]
 numOp op params = mapM unpackNum params >>= return . Number . foldl1 op
 
 boolOps :: [(String, [ArrowVal] -> ThrowsEx ArrowVal)]
-boolOps = [ ("==", numBoolOp (==))
+boolOps = [ ("eq?", eqv)
+          , ("==", numBoolOp (==))
           , ("<", numBoolOp (<))
           , (">", numBoolOp (>))
           , ("/=", numBoolOp (/=))
