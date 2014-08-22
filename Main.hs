@@ -13,9 +13,7 @@ main = do runErrorT (evalStateT repl stdEnv)
           return ()
 
 repl :: StateT Env Exception ()
-repl = do liftIO $ putStr "Arrow >> "
-	  liftIO $ hFlush stdout
-	  x <- liftIO $ getLine
+repl = do x <- liftIO $ putStr "Arrow >> " >> hFlush stdout >> getLine
 	  if x == "exit"
             then return ()
             else do evaled <- parseArrow x >>= eval
