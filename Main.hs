@@ -12,7 +12,7 @@ main ::IO ()
 main = do runErrorT (evalStateT repl stdEnv)
           return ()
 
-repl :: StateT Env Exception ()
+repl :: IOResult
 repl = do x <- liftIO $ putStr "Arrow >> " >> hFlush stdout >> getLine
 	  if x == "exit"
             then return ()

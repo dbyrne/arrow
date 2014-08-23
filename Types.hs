@@ -1,6 +1,8 @@
 module Types ( Expr (..)
              , Env (..)
              , Exception
+             , FuncSig
+             , IOResult
              , Result
              ) where
 
@@ -24,6 +26,7 @@ data Env = Env SymbolTable (Maybe Env)
 
 type Exception = ErrorT String IO
 type Result = StateT Env Exception Expr
+type IOResult = StateT Env Exception ()
 
 instance Show Expr where
 	show (Integer x) = show x
