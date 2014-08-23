@@ -5,6 +5,7 @@ import Types
 import Eval
 import qualified Data.Map as Map
 import Control.Monad.State
+import qualified Data.Vector as V
 
 math f  = do (List args) <- getSymbol "..."
              binOp f args
@@ -31,10 +32,10 @@ arrowIf = do [condExpr, expr1, expr2] <- getSymbols ifArgs
     where notEqual val1 (Integer val2) = val1 /= val2
 
 fnArgs = ["args", "..."]
-fn = do [(List args), (List body)] <- getSymbols fnArgs
+fn = do [(Vector args), (List body)] <- getSymbols fnArgs
         let newFn = do evalBody <- mapM eval body
                        return $ last evalBody
-        return $ Fn newFn (map (\(Symbol arg) -> arg) args)
+        return $ Fn newFn (map (\(Symbol arg) -> arg) (V.toList args))
 
 stdEnv = Env (Map.fromList [ ("+",  Fn (math (+)) ["..."])
                            , ("-",  Fn (math (-)) ["..."])

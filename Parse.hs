@@ -3,6 +3,7 @@ module Parse (parseArrow) where
 import Types
 import Control.Monad.Error (throwError)
 import Text.ParserCombinators.Parsec
+import qualified Data.Vector as V
 
 validSym = oneOf "!#$%&|*+-/:<=>?@^_~"
 
@@ -17,13 +18,24 @@ parseSymbol = do f <- lower <|> validSym
 		 return $ Symbol (f:r)
 
 parseList :: Parser Expr
-parseList = do char '(' ; skipMany space
+parseList = do char '('
+               skipMany space
 	       x <- parseExpr' `sepEndBy` (many1 space)
 	       char ')'
 	       return $ List x
+
+parseVector :: Parser Expr
+parseVector = do char '['
+                 skipMany space
+                 x <- parseExpr' `sepEndBy` (many1 space)
+                 char ']'
+                 return $ Vector (V.fromList x)
                
 parseExpr' :: Parser Expr
-parseExpr' = (try parseInteger) <|> (try parseSymbol) <|> (try parseList)
+parseExpr' =   (try parseInteger)
+           <|> (try parseSymbol)
+           <|> (try parseList)
+           <|> (try parseVector)
 
 parseExpr :: Parser Expr
 parseExpr = do skipMany space

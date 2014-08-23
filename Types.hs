@@ -5,6 +5,7 @@ module Types ( Expr (..)
              ) where
 
 import Data.Map (Map)
+import qualified Data.Vector as V
 import Control.Monad.State
 import Control.Monad.Error
 
@@ -12,7 +13,8 @@ data Expr = Integer Integer |
 	    Symbol String |
 	    Fn Func FuncSig |
 	    Special Func FuncSig |
-	    List [Expr]
+	    List [Expr] |
+            Vector (V.Vector Expr)
 
 type FuncSig = [String]
 type Func = Result
