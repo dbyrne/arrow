@@ -21,9 +21,3 @@ repl = do x <- liftIO $ putStr "Arrow >> " >> hFlush stdout >> getLine
                     repl
           `catchError` (\e -> do liftIO $ putStrLn e
                                  repl)
-
-
-
-
-
-

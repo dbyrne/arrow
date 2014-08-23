@@ -24,6 +24,11 @@ parseList = do char '('
 	       char ')'
 	       return $ List x
 
+parseQuotedList :: Parser Expr
+parseQuotedList = do char '\''
+                     List x <- parseList
+                     return $ QuotedList x
+
 parseVector :: Parser Expr
 parseVector = do char '['
                  skipMany space
@@ -32,10 +37,11 @@ parseVector = do char '['
                  return $ Vector (V.fromList x)
                
 parseExpr' :: Parser Expr
-parseExpr' =   (try parseInteger)
-           <|> (try parseSymbol)
-           <|> (try parseList)
-           <|> (try parseVector)
+parseExpr' =  (try parseInteger)
+          <|> (try parseSymbol)
+          <|> (try parseList)
+          <|> (try parseQuotedList)
+          <|> (try parseVector)
 
 parseExpr :: Parser Expr
 parseExpr = do skipMany space

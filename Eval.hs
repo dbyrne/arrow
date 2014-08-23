@@ -21,7 +21,7 @@ eval (Symbol s) = do env <- get
               else case parentEnv of
                      Nothing -> throwError ("Symbol " ++ s ++ " is unbound.")
                      (Just parent) -> lookupSymbol parent
-
+eval (QuotedList x) = return (List x)
 eval (List (x:xs)) =  eval x >>= apply
   where apply (Special f expectedArgs) = apply' expectedArgs xs f
         apply (Fn f expectedArgs) = do args <- mapM eval xs
