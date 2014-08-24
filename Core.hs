@@ -6,6 +6,7 @@ import Eval
 import qualified Data.Map as Map
 import Control.Monad.State
 import qualified Data.Vector as V
+import Control.Monad.Error (throwError)
 
 math :: (Integer -> Integer -> Integer) -> Result
 math f  = do (List args) <- getSymbol "..."
@@ -19,9 +20,9 @@ eq :: Result
 eq = do (List args) <- getSymbol "..."
         return $ foldl1 (\(Integer a) (Integer b) -> Integer(if a == b then 1 else 0)) args
 
-setArgs = ["symbol", "value"]
-set :: Result
-set = do [(Symbol s), e] <- getSymbols setArgs
+defArgs = ["symbol", "value"]
+def :: Result
+def = do [(Symbol s), e] <- getSymbols defArgs
          evalE <- eval e
          updateSymbolInParent s evalE
          return evalE
@@ -34,6 +35,12 @@ arrowIf = do [condExpr, expr1, expr2] <- getSymbols ifArgs
                then eval expr1
                else eval expr2
     where notEqual val1 (Integer val2) = val1 /= val2
+
+first :: Result
+first = do (List args) <- getSymbol "..."
+           case head args of
+             List (x:xs) -> return x
+             _ -> throwError "first operates on a list"
 
 fnArgs = ["args", "..."]
 fn :: Result
@@ -48,7 +55,8 @@ stdEnv = Env (Map.fromList [ ("+",  Fn (math (+)) ["..."])
                            , ("*",  Fn (math (*)) ["..."])
 			   , ("/",  Fn (math div) ["..."])
                            , ("eq", Fn eq ["..."])
-			   , ("set", Special set setArgs)
+                           , ("first", Fn first ["..."])
+			   , ("def", Special def defArgs)
                            , ("if",  Special arrowIf ifArgs)
                            , ("fn",  Special fn fnArgs )
                            ]) Nothing

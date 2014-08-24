@@ -26,6 +26,7 @@ eval (List (x:xs)) =  eval x >>= apply
   where apply (Special f expectedArgs) = apply' expectedArgs xs f
         apply (Fn f expectedArgs) = do args <- mapM eval xs
                                        apply' expectedArgs args f
+        apply _ = throwError "invalid function call"
 
 apply' :: FuncSig -> [Expr] -> Result -> Result
 apply' expectedArgs args f = do modify pushEnv
