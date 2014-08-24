@@ -36,23 +36,20 @@ arrowIf = do [condExpr, expr1, expr2] <- getSymbols ifArgs
                else eval expr2
     where notEqual val1 (Integer val2) = val1 /= val2
 
+firstArgs = ["coll"]
 first :: Result
-first = do (List args) <- getSymbol "..."
-           case head args of
-             List (x:_) -> return x
-             _ -> throwError "first operates on a list"
+first = do [List (x:_)] <- getSymbols firstArgs
+           return x
 
+restArgs = ["coll"]
 rest :: Result
-rest = do (List args) <- getSymbol "..."
-          case head args of
-            List (_:xs) -> return $ List xs
-            _ -> throwError "rest operates on a list"
+rest = do [List (_:xs)] <- getSymbols restArgs
+          return $ List xs
 
+consArgs = ["x", "xs"]
 cons :: Result
-cons = do (List args) <- getSymbol "..."
-          case args of
-            [x, List xs] -> return $ List (x:xs)
-            _ -> throwError "cons operates on an element and a list"
+cons = do [x, (List xs)] <- getSymbols consArgs
+          return $ List (x:xs)
 
 fnArgs = ["args", "..."]
 fn :: Result
@@ -67,9 +64,9 @@ stdEnv = Env (Map.fromList [ ("+",  Fn (math (+)) ["..."])
                            , ("*",  Fn (math (*)) ["..."])
 			   , ("/",  Fn (math div) ["..."])
                            , ("eq", Fn eq ["..."])
-                           , ("first", Fn first ["..."])
-                           , ("rest", Fn rest ["..."])
-                           , ("cons", Fn cons ["..."])
+                           , ("first", Fn first firstArgs)
+                           , ("rest", Fn rest restArgs)
+                           , ("cons", Fn cons consArgs)
 			   , ("def", Special def defArgs)
                            , ("if",  Special arrowIf ifArgs)
                            , ("fn",  Special fn fnArgs )
