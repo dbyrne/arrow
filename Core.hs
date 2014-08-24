@@ -39,8 +39,20 @@ arrowIf = do [condExpr, expr1, expr2] <- getSymbols ifArgs
 first :: Result
 first = do (List args) <- getSymbol "..."
            case head args of
-             List (x:xs) -> return x
+             List (x:_) -> return x
              _ -> throwError "first operates on a list"
+
+rest :: Result
+rest = do (List args) <- getSymbol "..."
+          case head args of
+            List (_:xs) -> return $ List xs
+            _ -> throwError "rest operates on a list"
+
+cons :: Result
+cons = do (List args) <- getSymbol "..."
+          case args of
+            [x, List xs] -> return $ List (x:xs)
+            _ -> throwError "cons operates on an element and a list"
 
 fnArgs = ["args", "..."]
 fn :: Result
@@ -56,6 +68,8 @@ stdEnv = Env (Map.fromList [ ("+",  Fn (math (+)) ["..."])
 			   , ("/",  Fn (math div) ["..."])
                            , ("eq", Fn eq ["..."])
                            , ("first", Fn first ["..."])
+                           , ("rest", Fn rest ["..."])
+                           , ("cons", Fn cons ["..."])
 			   , ("def", Special def defArgs)
                            , ("if",  Special arrowIf ifArgs)
                            , ("fn",  Special fn fnArgs )
