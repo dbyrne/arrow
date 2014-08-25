@@ -13,8 +13,7 @@ eval :: Expr -> Result
 eval (Integer n) = return (Integer n)
 eval (Fn f args) = return (Fn f args)
 eval (Special f args) = return (Special f args)
-eval (Symbol s) = do env <- get
-                     lookupSymbol env
+eval (Symbol s) = do get >>= lookupSymbol
     where lookupSymbol (Env symTable parentEnv) =
               if s `member` symTable == True
               then return (symTable ! s)
