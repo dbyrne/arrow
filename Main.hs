@@ -1,23 +1,36 @@
 module Main where
 
-import Core
-import Eval
-import Parse
-import Types
+import Emit
+
+import Control.Monad.Trans
+
 import System.IO
-import Control.Monad.State (evalStateT, liftIO, StateT)
-import Control.Monad.Error (catchError, runErrorT)
+import System.Environment
 
-main ::IO ()
-main = do runErrorT (evalStateT repl stdEnv)
-          return ()
+import qualified LLVM.General.AST as AST
 
-repl :: IOResult
-repl = do x <- liftIO $ putStr "Arrow >> " >> hFlush stdout >> getLine
-	  if x == "exit"
-            then return ()
-            else do evaled <- parseArrow x >>= eval
-                    liftIO . putStrLn . show $ evaled
-                    repl
-          `catchError` (\e -> do liftIO $ putStrLn e
-                                 repl)
+process :: AST.Module -> String -> IO (Maybe AST.Module)
+process modo source = do
+  let res = Right [(BinOp Add (Integer 3) (Integer 4)),
+                   (BinOp Add (Integer 5) (Integer 6))]
+  case res of
+    Left err -> putStrLn err >> return Nothing
+    Right ex -> do
+      ast <- codegen modo ex
+      return $ Just ast
+
+repl :: AST.Module -> IO ()
+repl mod = do
+  input <- putStr "Arrow >> " >> hFlush stdout >> getLine
+  modn <- liftIO $ process mod input
+  case modn of
+    Just modn -> repl modn
+    Nothing -> repl mod
+
+emptyModule :: AST.Module
+emptyModule = AST.defaultModule { AST.moduleName = "Arrow" }
+
+main :: IO ()
+main = do
+  repl emptyModule
+
