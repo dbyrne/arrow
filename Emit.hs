@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+
 
 module Emit where
 
@@ -27,31 +27,12 @@ import Control.Monad.State
 import Control.Applicative
 
 import JIT
+import Types
 
 import qualified LLVM.General.AST.Float as F
 import qualified LLVM.General.AST.FloatingPointPredicate as FP
 
-data Expr = Integer Integer
-          | BinOp Op Expr Expr
 
-data Op = Add
-
-type SymbolTable = [(String, AST.Operand)]
-
-type Names = Map.Map String Int
-
-newtype Codegen a = Codegen { runCodegen :: State CodegenState a }
-  deriving (Functor, Applicative, Monad, MonadState CodegenState )
-
-data CodegenState
-  = CodegenState {
-    currentBlock :: AST.Name                     -- Name of the active block to append to
-  , blocks       :: Map.Map AST.Name BlockState  -- Blocks for function
-  , symtab       :: SymbolTable              -- Function scope symbol table
-  , blockCount   :: Int                      -- Count of basic blocks
-  , count        :: Word                     -- Count of unnamed instructions
-  , names        :: Names                    -- Name Supply
-  } deriving Show
 
 sortBlocks :: [(AST.Name, BlockState)] -> [(AST.Name, BlockState)]
 sortBlocks = sortBy (compare `on` (idx . snd))
@@ -123,13 +104,6 @@ setBlock bname = do
   modify $ \s -> s { currentBlock = bname }
   return bname
 
-data BlockState
-  = BlockState {
-    idx   :: Int                            -- Block index
-  , stack :: [I.Named I.Instruction]            -- Stack of instructions
-  , term  :: Maybe (I.Named I.Terminator)       -- Block terminator
-  } deriving Show
-             
 add :: AST.Operand -> AST.Operand -> Codegen AST.Operand
 add a b = instr $ AST.Add False False a b []
 
@@ -148,8 +122,71 @@ instr ins = do
   modifyBlock (blk { stack = i ++ [ref I.:= ins] } )
   return $ AST.LocalReference i32 ref
 
+toArgs :: [AST.Operand] -> [(AST.Operand, [A.ParameterAttribute])]
+toArgs = map (\x -> (x, []))
+
+call :: AST.Operand -> [AST.Operand] -> Codegen AST.Operand
+call fn args = instr $ I.Call False CC.C [] (Right fn) (toArgs args) [] []
+
+externf :: AST.Name -> AST.Operand
+externf = AST.ConstantOperand . C.GlobalReference (FunctionType i32 [i32, i32] False)
+
+toSig :: [String] -> [(AST.Type, AST.Name)]
+toSig = map (\x -> (i32, AST.Name x))
+
+alloca :: Type -> Codegen AST.Operand
+alloca ty = instr $ I.Alloca ty Nothing 0 []
+
+store :: AST.Operand -> AST.Operand -> Codegen AST.Operand
+store ptr val = instr $ I.Store False ptr val Nothing 0 []
+
+load :: AST.Operand -> Codegen AST.Operand
+load ptr = instr $ I.Load False ptr Nothing 0 []
+
+assign :: String -> AST.Operand -> Codegen ()
+assign var x = do
+  lcls <- gets symtab
+  modify $ \s -> s { symtab = [(var, x)] ++ lcls }
+
+getvar :: String -> Codegen AST.Operand
+getvar var = do
+  syms <- gets symtab
+  case lookup var syms of
+    Just x  -> return x
+    Nothing -> error $ "Local variable not in scope: " ++ show var
+
+codegenTop :: Expr -> LLVM ()
+codegenTop (Defn name args body) = do
+  define i32 name fnargs bls
+  where
+    fnargs = toSig args
+    bls = createBlocks $ execCodegen $ do
+      entry <- addBlock entryBlockName
+      setBlock entry
+      forM args $ \a -> do
+        var <- alloca i32
+        store var (AST.LocalReference (FunctionType i32 [i32, i32] False) (AST.Name a))
+        assign a var
+      cgen body >>= ret
+
+codegenTop exp = do
+  define i32 "main" [] blks
+  where
+    blks = createBlocks $ execCodegen $ do
+      entry <- addBlock entryBlockName
+      setBlock entry
+      cgen exp >>= ret
+
+
+
 cgen :: Expr -> Codegen AST.Operand
-cgen (Integer n) = return $ AST.ConstantOperand $ C.Int 32 n
+cgen (Integer x) = return $ AST.ConstantOperand $ C.Int 32 x
+
+cgen (Id x) = getvar x >>= load
+
+cgen (Compound x xs) = do
+  args <- mapM cgen xs
+  call (externf (AST.Name x)) args
 
 cgen (BinOp op a b) = do
   case op of
@@ -158,13 +195,11 @@ cgen (BinOp op a b) = do
       cb <- cgen b
       add ca cb
 
+
 exPutChar :: AST.Operand
 exPutChar = AST.ConstantOperand $ C.GlobalReference (FunctionType i32 [i32] False) (AST.Name "main")
 
-namedTerm = I.Do $ I.Ret (Just (AST.LocalReference double (AST.UnName 0))) []
-
-newtype LLVM a = LLVM { unLLVM :: State AST.Module a }
-  deriving (Functor, Applicative, Monad, MonadState AST.Module )
+namedTerm = I.Do $ I.Ret (Just (AST.LocalReference i32 (AST.UnName 0))) []
 
 runLLVM :: AST.Module -> LLVM a -> AST.Module
 runLLVM = flip (execState . unLLVM)
@@ -182,15 +217,6 @@ addDefn :: AST.Definition -> LLVM ()
 addDefn d = do
   defs <- gets AST.moduleDefinitions
   modify $ \s -> s { AST.moduleDefinitions = defs ++ [d] }
-
-codegenTop :: Expr -> LLVM ()
-codegenTop exp = do
-  define i32 "main" [] blks
-  where
-    blks = createBlocks $ execCodegen $ do
-      entry <- addBlock entryBlockName
-      setBlock entry
-      cgen exp >>= ret
 
 codegen :: AST.Module -> [Expr] -> IO AST.Module
 codegen mod fns = do
