@@ -14,9 +14,11 @@ data Expr = Integer Integer
           | Func String
           | Defn String [String] Expr
           | BinOp Op Expr Expr
+          | If Expr Expr Expr
           | Compound String [Expr]
 
 data Op = Add
+        | LessThan
 
 type SymbolTable = [(String, Operand)]
 

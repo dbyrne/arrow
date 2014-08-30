@@ -30,9 +30,13 @@ import JIT
 import Types
 
 import qualified LLVM.General.AST.Float as F
-import qualified LLVM.General.AST.FloatingPointPredicate as FP
+import qualified LLVM.General.AST.IntegerPredicate as IP
 
 
+one = AST.ConstantOperand $ C.Int 32 1
+zero = AST.ConstantOperand $ C.Int 32 0
+false = zero
+true = one
 
 sortBlocks :: [(AST.Name, BlockState)] -> [(AST.Name, BlockState)]
 sortBlocks = sortBy (compare `on` (idx . snd))
@@ -45,6 +49,9 @@ makeBlock (l, (BlockState _ s t)) = G.BasicBlock l s (maketerm t)
   where
     maketerm (Just x) = x
     maketerm Nothing = error $ "Block has no terminator: " ++ (show l)
+
+getBlock :: Codegen AST.Name
+getBlock = gets currentBlock
 
 entryBlockName :: String
 entryBlockName = "entry"
@@ -106,6 +113,12 @@ setBlock bname = do
 
 add :: AST.Operand -> AST.Operand -> Codegen AST.Operand
 add a b = instr $ AST.Add False False a b []
+
+lt :: AST.Operand -> AST.Operand -> Codegen AST.Operand
+lt a b = do
+  test <- icmp IP.ULT a b
+  return test
+  --uitofp i32 test
 
 fresh :: Codegen Word
 fresh = do
@@ -190,10 +203,53 @@ cgen (Compound x xs) = do
 
 cgen (BinOp op a b) = do
   case op of
+    LessThan -> do
+      ca <- cgen a
+      cb <- cgen b
+      lt ca cb
     Add -> do
       ca <- cgen a
       cb <- cgen b
       add ca cb
+
+cgen (If cond tr fl) = do
+  ifthen <- addBlock "if.then"
+  ifelse <- addBlock "if.else"
+  ifexit <- addBlock "if.exit"
+
+  -- %entry
+  cond <- cgen cond
+  test <- icmp IP.EQ false cond
+  cbr test ifthen ifelse -- Branch based on the condition
+
+  -- if.then
+  setBlock ifthen
+  trval <- cgen tr       -- Generate code for the true branch
+  br ifexit              -- Branch to the merge block
+  ifthen <- getBlock
+
+  -- if.else
+  setBlock ifelse
+  flval <- cgen fl       -- Generate code for the false branch
+  br ifexit              -- Branch to the merge block
+  ifelse <- getBlock
+
+  -- if.exit
+  setBlock ifexit
+  phi i32 [(trval, ifthen), (flval, ifelse)]
+
+phi :: Type -> [(AST.Operand, AST.Name)] -> Codegen AST.Operand
+phi ty incoming = instr $ I.Phi ty incoming []
+
+icmp :: IP.IntegerPredicate -> AST.Operand -> AST.Operand -> Codegen AST.Operand
+icmp cond a b = instr $ I.ICmp cond a b []
+
+  -- Control Flow
+br :: AST.Name -> Codegen (I.Named I.Terminator)
+br val = terminator $ I.Do $ I.Br val []
+
+cbr :: AST.Operand -> AST.Name -> AST.Name -> Codegen (I.Named I.Terminator)
+cbr cond tr fl = terminator $ I.Do $ I.CondBr cond tr fl []
 
 
 exPutChar :: AST.Operand

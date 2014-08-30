@@ -13,8 +13,11 @@ import qualified LLVM.General.AST as AST
 process :: AST.Module -> String -> IO (Maybe AST.Module)
 process modo source = do
   let res = Right [
-        (Defn "+" ["x", "y"] (BinOp Add (Id "x") (Id "y"))),
-        (Compound "+" [(Compound "+" [Integer 5, Integer 1]), Integer 10])
+        (If (BinOp LessThan (Integer 2) (Integer 2)) (Integer 1) (Integer 2))
+        --(Defn "+" ["x", "y"] (BinOp Add (Id "x") (Id "y"))),
+        --(If (BinOp LessThan (Integer 1) (Integer 2))
+        -- (Compound "+" [(Compound "+" [Integer 5, Integer 1]), Integer 10])
+        -- (Integer 99))
         ]
   case res of
     Left err -> putStrLn err >> return Nothing
