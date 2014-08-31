@@ -197,10 +197,11 @@ cgen (Integer x) = return $ AST.ConstantOperand $ C.Int 32 x
 
 cgen (Id x) = getvar x >>= load
 
-cgen (Compound x xs) = do
-  args <- mapM cgen xs
-  call (externf (AST.Name x)) args
-
+cgen (List x) = do
+  (f:args) <- mapM cgen x
+  -- call (externf (AST.Name f)) args
+  call f args
+  
 cgen (BinOp op a b) = do
   case op of
     LessThan -> do
