@@ -144,8 +144,9 @@ call fn args = instr $ I.Call False CC.C [] (Right fn) (toArgs args) [] []
 externf :: AST.Name -> AST.Operand
 externf = AST.ConstantOperand . C.GlobalReference (FunctionType i32 [i32, i32] False)
 
-toSig :: [String] -> [(AST.Type, AST.Name)]
-toSig = map (\x -> (i32, AST.Name x))
+toSig :: [Expr] -> [(AST.Type, AST.Name)]
+toSig ((Id x):xs) = (i32, AST.Name x):(toSig xs)
+toSig [] = []
 
 alloca :: Type -> Codegen AST.Operand
 alloca ty = instr $ I.Alloca ty Nothing 0 []
@@ -169,18 +170,22 @@ getvar var = do
     Nothing -> error $ "Local variable not in scope: " ++ show var
 
 codegenTop :: Expr -> LLVM ()
-codegenTop (Defn name args body) = do
+codegenTop (List [Id "defn", Id name, List args, body]) = do
   define i32 name fnargs bls
   where
     fnargs = toSig args
     bls = createBlocks $ execCodegen $ do
       entry <- addBlock entryBlockName
       setBlock entry
-      forM args $ \a -> do
+      forM args $ \(Id a) -> do
         var <- alloca i32
         store var (AST.LocalReference (FunctionType i32 [i32, i32] False) (AST.Name a))
         assign a var
       cgen body >>= ret
+
+--codegenTop (Extern name args) = do
+--  external double name fnargs
+--  where fnargs = toSig args
 
 codegenTop exp = do
   define i32 "main" [] blks
@@ -268,6 +273,15 @@ define retty label argtys body = addDefn $
   , G.parameters  = ([G.Parameter ty nm [] | (ty, nm) <- argtys], False)
   , G.returnType  = retty
   , G.basicBlocks = body
+  }
+
+external :: Type -> String -> [(Type, AST.Name)] -> LLVM ()
+external retty label argtys = addDefn $
+  AST.GlobalDefinition $ G.functionDefaults {
+    G.name        = AST.Name label
+  , G.parameters  = ([G.Parameter ty nm [] | (ty, nm) <- argtys], False)
+  , G.returnType  = retty
+  , G.basicBlocks = []
   }
 
 addDefn :: AST.Definition -> LLVM ()

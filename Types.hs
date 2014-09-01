@@ -10,10 +10,11 @@ import LLVM.General.AST (Module, Name, Operand)
 import LLVM.General.AST.Instruction (Instruction, Named, Terminator)
 
 data Expr = Integer Integer
-          | Symbol String
+          | String String
           | Id String
           | Func String
           | Defn String [String] Expr
+          | Extern String [String]
           | BinOp Op Expr Expr
           | If Expr Expr Expr
           | List [Expr]

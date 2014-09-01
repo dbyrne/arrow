@@ -14,10 +14,10 @@ parseInteger = do sign <- option "" (string "-")
 		  number <- many1 digit
 		  return $ Integer (read (sign++number))
 
-parseSymbol :: Parser Expr
-parseSymbol = do f <- lower <|> validSym
-		 r <- many (letter <|> validSym <|> digit)
-		 return $ Symbol (f:r)
+parseId :: Parser Expr
+parseId = do f <- lower <|> validSym
+             r <- many (letter <|> validSym <|> digit)
+             return $ Id (f:r)
 
 parseList :: Parser Expr
 parseList = do char '('
@@ -28,7 +28,7 @@ parseList = do char '('
 
 parseExpr' :: Parser Expr
 parseExpr' =  (try parseInteger)
-          <|> (try parseSymbol)
+          <|> (try parseId)
           <|> (try parseList)
 
 parseExpr :: Parser Expr
