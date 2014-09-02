@@ -15,19 +15,18 @@ import qualified LLVM.General.AST.CallingConvention as CC
 import qualified LLVM.General.AST.Attribute as A
 import LLVM.General.AST.Type
 
-import Data.Function
-import Data.List
 import Data.Word
 import Data.Int
 import Control.Monad.Error
+import Control.Monad.State
 import Control.Applicative
 import qualified Data.Map as Map
 
-import Control.Monad.State
 import Control.Applicative
 
 import JIT
 import Types
+import BlockUtils
 
 import qualified LLVM.General.AST.Float as F
 import qualified LLVM.General.AST.IntegerPredicate as IP
@@ -39,45 +38,11 @@ zero = AST.ConstantOperand $ C.Int 32 0
 false = zero
 true = one
 
-sortBlocks :: [(AST.Name, BlockState)] -> [(AST.Name, BlockState)]
-sortBlocks = sortBy (compare `on` (idx . snd))
-
-createBlocks :: CodegenState -> [G.BasicBlock]
-createBlocks m = map makeBlock $ sortBlocks $ Map.toList (blocks m)
-
-makeBlock :: (AST.Name, BlockState) -> G.BasicBlock
-makeBlock (l, (BlockState _ s t)) = G.BasicBlock l s (maketerm t)
-  where
-    maketerm (Just x) = x
-    maketerm Nothing = error $ "Block has no terminator: " ++ (show l)
-
-getBlock :: Codegen AST.Name
-getBlock = gets currentBlock
-
-entryBlockName :: String
-entryBlockName = "entry"
-
-emptyBlock :: Int -> BlockState
-emptyBlock i = BlockState i [] Nothing
-
 emptyCodegen :: CodegenState
 emptyCodegen = CodegenState (AST.Name entryBlockName) Map.empty [] 1 0 Map.empty
 
 execCodegen :: Codegen a -> CodegenState
 execCodegen m = execState (runCodegen m) emptyCodegen
-
-addBlock :: String -> Codegen AST.Name
-addBlock bname = do
-  bls <- gets blocks
-  ix <- gets blockCount
-  nms <- gets names
-  let new = emptyBlock ix
-      (qname, supply) = uniqueName bname nms
-  modify $ \s -> s { blocks = Map.insert (AST.Name qname) new bls
-                   , blockCount = ix + 1
-                   , names = supply
-                   }
-  return (AST.Name qname)
 
 ret :: AST.Operand -> Codegen (I.Named I.Terminator)
 ret val = terminator $ I.Do $ I.Ret (Just val) []
@@ -95,22 +60,6 @@ current = do
   case Map.lookup c blks of
     Just x -> return x
     Nothing -> error $ "No such block: " ++ show c
-
-modifyBlock :: BlockState -> Codegen ()
-modifyBlock new = do
-  active <- gets currentBlock
-  modify $ \s -> s { blocks = Map.insert active new (blocks s) }
-
-uniqueName :: String -> Names -> (String, Names)
-uniqueName nm ns =
-  case Map.lookup nm ns of
-    Nothing -> (nm,  Map.insert nm 1 ns)
-    Just ix -> (nm ++ show ix, Map.insert nm (ix+1) ns)
-
-setBlock :: AST.Name -> Codegen AST.Name
-setBlock bname = do
-  modify $ \s -> s { currentBlock = bname }
-  return bname
 
 add :: AST.Operand -> AST.Operand -> Codegen AST.Operand
 add a b = instr $ AST.Add False False a b []
