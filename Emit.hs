@@ -32,6 +32,7 @@ import Types
 import qualified LLVM.General.AST.Float as F
 import qualified LLVM.General.AST.IntegerPredicate as IP
 
+import Debug.Trace
 
 one = AST.ConstantOperand $ C.Int 32 1
 zero = AST.ConstantOperand $ C.Int 32 0
@@ -159,7 +160,7 @@ load ptr = instr $ I.Load False ptr Nothing 0 []
 
 assign :: String -> AST.Operand -> Codegen ()
 assign var x = do
-  lcls <- gets symtab
+  lcls <- trace var (gets symtab)
   modify $ \s -> s { symtab = [(var, x)] ++ lcls }
 
 getvar :: String -> Codegen AST.Operand
@@ -183,9 +184,9 @@ codegenTop (List [Id "defn", Id name, List args, body]) = do
         assign a var
       cgen body >>= ret
 
---codegenTop (Extern name args) = do
---  external double name fnargs
---  where fnargs = toSig args
+codegenTop (List [Id "extern", Id name, List args]) = do
+  external i32 name fnargs
+  where fnargs = toSig args
 
 codegenTop exp = do
   define i32 "main" [] blks
@@ -195,29 +196,25 @@ codegenTop exp = do
       setBlock entry
       cgen exp >>= ret
 
-
-
 cgen :: Expr -> Codegen AST.Operand
 cgen (Integer x) = return $ AST.ConstantOperand $ C.Int 32 x
 
 cgen (Id x) = getvar x >>= load
 
-cgen (List x) = do
-  (f:args) <- mapM cgen x
-  -- call (externf (AST.Name f)) args
-  call f args
-  
-cgen (BinOp op a b) = do
-  case op of
-    LessThan -> do
-      ca <- cgen a
-      cb <- cgen b
-      lt ca cb
-    Add -> do
-      ca <- cgen a
-      cb <- cgen b
-      add ca cb
+cgen (List [Id "+", a, b]) = do
+  ca <- cgen a
+  cb <- cgen b
+  add ca cb
 
+cgen (List [Id "<", a, b]) = do
+  ca <- cgen a
+  cb <- cgen b
+  lt ca cb
+
+cgen (List ((Id x):xs)) = do
+  args <- mapM cgen xs
+  call (externf (AST.Name x)) args
+  
 cgen (If cond tr fl) = do
   ifthen <- addBlock "if.then"
   ifelse <- addBlock "if.else"

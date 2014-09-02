@@ -12,10 +12,6 @@ import LLVM.General.AST.Instruction (Instruction, Named, Terminator)
 data Expr = Integer Integer
           | String String
           | Id String
-          | Func String
-          | Defn String [String] Expr
-          | Extern String [String]
-          | BinOp Op Expr Expr
           | If Expr Expr Expr
           | List [Expr]
 
